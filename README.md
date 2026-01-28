@@ -79,12 +79,13 @@ bash train_multi_node.sh
 
 ## 引用
 
-如果您使用了本代码库，请引用 VideoThinkBench 论文：
+如果您使用了本代码库，请引用 "Thinking with Video" 论文：
 
 ```bibtex
-@article{videothinkbench2025,
-  title={Thinking with Video},
-  author={...},
+@article{tong2025thinking,
+  title={Thinking with video: Video generation as a promising multimodal reasoning paradigm},
+  author={Tong, Jingqi and Mou, Yurong and Li, Hangcheng and Li, Mingzhe and Yang, Yongzhuo and Zhang, Ming and Chen, Qiguang and Liang, Tianyi and Hu, Xiaomeng and Zheng, Yining and others},
+  journal={arXiv preprint arXiv:2511.04570},
   year={2025}
 }
 ```
