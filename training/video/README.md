@@ -53,19 +53,37 @@ bash train_single_node.sh --dataset ./dataset.csv
 #   --num_epochs 3
 ```
 
-### 多节点训练
+### 多节点训练 (Slurm)
 
-在每个节点上运行：
 ```bash
 export MODEL_BASE_PATH=/path/to/Wan2.2-TI2V-5B
 export DIFFSYNTH_PATH=/path/to/DiffSynth-Studio
-export MASTER_ADDR=192.168.1.100
-export MASTER_PORT=29500
-export NUM_NODES=5
-export NODE_RANK=0  # 每个节点不同: 0, 1, 2, 3, 4
 
-bash train_multi_node.sh --dataset /shared/dataset.csv
+bash train_multi_node.sh \
+    --dataset /path/to/dataset.csv \
+    --num_nodes 15 \
+    --gpus_per_node 8 \
+    --lora_rank 32
 ```
+
+**可用参数**:
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `--num_nodes` | 15 | 节点数 |
+| `--gpus_per_node` | 8 | 每节点 GPU 数 |
+| `--dataset` | `./dataset.csv` | 数据集 CSV 路径 |
+| `--output_dir` | `./output/wan_lora_multi` | 输出目录 |
+| `--lora_rank` | 32 | LoRA Rank |
+| `--num_epochs` | 3 | 训练轮数 |
+| `--learning_rate` | 1e-4 | 学习率 |
+| `--num_frames` | 81 | 视频帧数 |
+| `--height` | 896 | 视频高度 |
+| `--width` | 480 | 视频宽度 |
+| `--save_steps` | 250 | 保存间隔 |
+| `--lora_checkpoint` | - | 续训 checkpoint 路径 |
+
+> **Note**: 脚本会自动生成 `accelerate_config.yaml` 到当前目录，无需手动配置。
 
 ## 视频配置约束 (CRITICAL)
 
