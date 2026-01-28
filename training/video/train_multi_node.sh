@@ -7,7 +7,7 @@
 # Usage:
 #   MODEL_BASE_PATH=/path/to/Wan2.2-TI2V-5B \
 #   DIFFSYNTH_PATH=/path/to/DiffSynth-Studio \
-#   bash train_multi_node.sh --dataset /path/to/dataset.csv
+#   bash train_multi_node.sh --dataset /path/to/dataset.csv --num_nodes 15
 #
 # Required Environment Variables:
 #   MODEL_BASE_PATH: Path to Wan2.2-TI2V-5B model weights
@@ -30,6 +30,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DATASET_BASE_PATH=""
 DATASET_PATH="${SCRIPT_DIR}/dataset.csv"
 OUTPUT_PATH="${SCRIPT_DIR}/output/wan_lora_multi"
+
+# Cluster configuration
+NUM_NODES=15
+GPUS_PER_NODE=8
 
 # Video configuration
 NUM_FRAMES=81
@@ -58,6 +62,14 @@ while [[ $# -gt 0 ]]; do
             ;;
         --output_dir)
             OUTPUT_PATH="$2"
+            shift 2
+            ;;
+        --num_nodes)
+            NUM_NODES="$2"
+            shift 2
+            ;;
+        --gpus_per_node)
+            GPUS_PER_NODE="$2"
             shift 2
             ;;
         --num_frames)
@@ -99,6 +111,9 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# Calculate total processes
+NUM_PROCESSES=$((NUM_NODES * GPUS_PER_NODE))
+
 # ============================================================
 # Validate Environment
 # ============================================================
@@ -133,6 +148,7 @@ MODEL_PATHS='[
 echo "========================================"
 echo "Wan2.2-TI2V-5B LoRA 多机分布式训练 (Rank=${LORA_RANK})"
 echo "========================================"
+echo "  Nodes: ${NUM_NODES} x ${GPUS_PER_NODE} GPUs = ${NUM_PROCESSES} processes"
 echo "  LoRA Rank: ${LORA_RANK}"
 echo "  Epochs: ${NUM_EPOCHS}"
 echo "  Resolution: ${WIDTH}x${HEIGHT}"
@@ -143,10 +159,39 @@ echo "========================================"
 mkdir -p "${OUTPUT_PATH}"
 
 # ============================================================
+# Generate Dynamic Accelerate Config
+# ============================================================
+CONFIG_FILE="/tmp/accelerate_config_${NUM_NODES}x${GPUS_PER_NODE}.yaml"
+cat > "${CONFIG_FILE}" << EOF
+compute_environment: LOCAL_MACHINE
+debug: false
+deepspeed_config:
+  gradient_accumulation_steps: ${GRADIENT_ACCUMULATION}
+  offload_optimizer_device: 'none'
+  offload_param_device: 'none'
+  zero3_init_flag: false
+  zero_stage: 2
+distributed_type: DEEPSPEED
+downcast_bf16: 'no'
+enable_cpu_affinity: false
+machine_rank: 0
+main_training_function: main
+mixed_precision: bf16
+num_machines: ${NUM_NODES}
+num_processes: ${NUM_PROCESSES}
+rdzv_backend: static
+same_network: true
+tpu_env: []
+tpu_use_cluster: false
+tpu_use_sudo: false
+use_cpu: false
+EOF
+
+echo "Generated config: ${CONFIG_FILE}"
+
+# ============================================================
 # Run Training (Slurm manages node coordination)
 # ============================================================
-CONFIG_FILE="${SCRIPT_DIR}/../../configs/accelerate_config_multi.yaml"
-
 cd "${DIFFSYNTH_PATH}"
 
 accelerate launch \
