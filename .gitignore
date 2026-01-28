@@ -1,0 +1,40 @@
+.git
+*.pyc
+__pycache__/
+*.egg-info/
+dist/
+build/
+.eggs/
+*.so
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Output
+outputs/
+output/
+checkpoints/
+*.safetensors
+*.pth
+*.pt
+!requirements.txt
+
+# Data
+data/
+dataset/
+*.csv
+*.json
+!configs/*.json
+
+# Logs
+*.log
+wandb/
+tensorboard/
+runs/
+
+# OS
+.DS_Store
+Thumbs.db

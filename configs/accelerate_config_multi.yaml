@@ -1,0 +1,13 @@
+compute_environment: LOCAL_MACHINE
+distributed_type: DEEPSPEED
+num_machines: 5
+num_processes: 40
+machine_rank: ${MACHINE_RANK}
+main_process_ip: ${MASTER_ADDR}
+main_process_port: ${MASTER_PORT}
+mixed_precision: bf16
+deepspeed_config:
+  zero_stage: 2
+  offload_optimizer_device: 'none'
+  offload_param_device: 'none'
+  gradient_accumulation_steps: 1

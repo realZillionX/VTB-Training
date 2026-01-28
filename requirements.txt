@@ -1,0 +1,24 @@
+# Core
+torch>=2.0.0
+transformers>=4.40.0
+accelerate>=0.30.0
+deepspeed>=0.14.0
+peft>=0.10.0
+safetensors>=0.4.0
+
+# VLM Training (Qwen3-VL)
+ms-swift>=2.0.0
+vllm>=0.4.0
+datasets>=2.0.0
+
+# Data Processing
+numpy>=1.24.0
+pandas>=2.0.0
+Pillow>=10.0.0
+opencv-python>=4.8.0
+
+# Puzzle Generation & Evaluation
+tqdm>=4.66.0
+
+# Optional: Audio transcription for evaluation
+# openai-whisper>=20231117
