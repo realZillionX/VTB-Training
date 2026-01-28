@@ -1,29 +1,17 @@
 #!/bin/bash
 # ============================================================
-# Wan2.2-TI2V LoRA Training Script (Multi-Node)
+# Wan2.2-TI2V LoRA Training Script (Multi-Node with Slurm)
 # Using DiffSynth-Studio with DeepSpeed ZeRO-2
 # ============================================================
 #
 # Usage:
-#   # On each node:
 #   MODEL_BASE_PATH=/path/to/Wan2.2-TI2V-5B \
 #   DIFFSYNTH_PATH=/path/to/DiffSynth-Studio \
-#   MASTER_ADDR=<master_ip> \
-#   MASTER_PORT=29500 \
-#   NUM_NODES=5 \
-#   NODE_RANK=<0-4> \
 #   bash train_multi_node.sh --dataset /path/to/dataset.csv
 #
 # Required Environment Variables:
 #   MODEL_BASE_PATH: Path to Wan2.2-TI2V-5B model weights
 #   DIFFSYNTH_PATH: Path to DiffSynth-Studio installation
-#   MASTER_ADDR: IP address of the master node
-#   MASTER_PORT: Port for distributed communication (default: 29500)
-#   NUM_NODES: Total number of nodes
-#   NODE_RANK: Rank of current node (0-indexed)
-#
-# Optional Arguments:
-#   Same as train_single_node.sh
 
 set -e
 
@@ -33,24 +21,13 @@ set -e
 export DIFFSYNTH_SKIP_DOWNLOAD=True
 export HF_HUB_OFFLINE=1
 export TRANSFORMERS_OFFLINE=1
-export NCCL_P2P_DISABLE=1
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ============================================================
-# Multi-Node Configuration
-# ============================================================
-MASTER_ADDR="${MASTER_ADDR:?Error: MASTER_ADDR not set}"
-MASTER_PORT="${MASTER_PORT:-29500}"
-NUM_NODES="${NUM_NODES:?Error: NUM_NODES not set}"
-NODE_RANK="${NODE_RANK:?Error: NODE_RANK not set}"
-GPUS_PER_NODE="${GPUS_PER_NODE:-8}"
-
-TOTAL_GPUS=$((NUM_NODES * GPUS_PER_NODE))
-
-# ============================================================
 # Default Parameters
 # ============================================================
+DATASET_BASE_PATH=""
 DATASET_PATH="${SCRIPT_DIR}/dataset.csv"
 OUTPUT_PATH="${SCRIPT_DIR}/output/wan_lora_multi"
 
@@ -66,6 +43,9 @@ LORA_RANK=32
 GRADIENT_ACCUMULATION=1
 DATASET_REPEAT=1
 SAVE_STEPS=250
+
+# Resume training (optional)
+LORA_CHECKPOINT=""
 
 # ============================================================
 # Parse Arguments
@@ -108,6 +88,10 @@ while [[ $# -gt 0 ]]; do
             SAVE_STEPS="$2"
             shift 2
             ;;
+        --lora_checkpoint)
+            LORA_CHECKPOINT="$2"
+            shift 2
+            ;;
         *)
             echo "Unknown option: $1"
             exit 1
@@ -144,61 +128,31 @@ MODEL_PATHS='[
 ]'
 
 # ============================================================
-# Config Display (only on rank 0)
+# Config Display
 # ============================================================
-if [ "${NODE_RANK}" == "0" ]; then
-    echo "============================================================"
-    echo "Wan2.2-TI2V LoRA Training (Multi-Node)"
-    echo "============================================================"
-    echo ""
-    echo "Cluster Configuration:"
-    echo "  Master: ${MASTER_ADDR}:${MASTER_PORT}"
-    echo "  Nodes: ${NUM_NODES}"
-    echo "  GPUs per Node: ${GPUS_PER_NODE}"
-    echo "  Total GPUs: ${TOTAL_GPUS}"
-    echo ""
-    echo "Video Configuration:"
-    echo "  Resolution: ${WIDTH}x${HEIGHT}"
-    echo "  Frames: ${NUM_FRAMES}"
-    echo ""
-    echo "Training Parameters:"
-    echo "  LoRA Rank: ${LORA_RANK}"
-    echo "  Epochs: ${NUM_EPOCHS}"
-    echo "  Learning Rate: ${LEARNING_RATE}"
-    echo ""
-fi
+echo "========================================"
+echo "Wan2.2-TI2V-5B LoRA 多机分布式训练 (Rank=${LORA_RANK})"
+echo "========================================"
+echo "  LoRA Rank: ${LORA_RANK}"
+echo "  Epochs: ${NUM_EPOCHS}"
+echo "  Resolution: ${WIDTH}x${HEIGHT}"
+echo "  Frames: ${NUM_FRAMES}"
+echo "  输出路径: ${OUTPUT_PATH}"
+echo "========================================"
 
 mkdir -p "${OUTPUT_PATH}"
 
 # ============================================================
-# Create Dynamic Accelerate Config
+# Run Training (Slurm manages node coordination)
 # ============================================================
-ACCELERATE_CONFIG="/tmp/accelerate_config_${NODE_RANK}.yaml"
-cat > "${ACCELERATE_CONFIG}" << EOF
-compute_environment: LOCAL_MACHINE
-distributed_type: DEEPSPEED
-num_machines: ${NUM_NODES}
-num_processes: ${TOTAL_GPUS}
-machine_rank: ${NODE_RANK}
-main_process_ip: ${MASTER_ADDR}
-main_process_port: ${MASTER_PORT}
-mixed_precision: bf16
-deepspeed_config:
-  zero_stage: 2
-  offload_optimizer_device: 'none'
-  offload_param_device: 'none'
-  gradient_accumulation_steps: ${GRADIENT_ACCUMULATION}
-EOF
+CONFIG_FILE="${SCRIPT_DIR}/../../configs/accelerate_config_multi.yaml"
 
-# ============================================================
-# Run Training
-# ============================================================
 cd "${DIFFSYNTH_PATH}"
 
 accelerate launch \
-    --config_file "${ACCELERATE_CONFIG}" \
+    --config_file "${CONFIG_FILE}" \
     "${SCRIPT_DIR}/train.py" \
-    --dataset_base_path "" \
+    --dataset_base_path "${DATASET_BASE_PATH}" \
     --dataset_metadata_path "${DATASET_PATH}" \
     --height ${HEIGHT} \
     --width ${WIDTH} \
@@ -216,12 +170,7 @@ accelerate launch \
     --lora_rank ${LORA_RANK} \
     --extra_inputs "input_image" \
     --use_gradient_checkpointing \
-    --save_steps ${SAVE_STEPS}
+    --save_steps ${SAVE_STEPS} \
+    ${LORA_CHECKPOINT:+--lora_checkpoint "${LORA_CHECKPOINT}"}
 
-if [ "${NODE_RANK}" == "0" ]; then
-    echo ""
-    echo "============================================================"
-    echo "Training finished!"
-    echo "Model saved to: ${OUTPUT_PATH}"
-    echo "============================================================"
-fi
+echo "训练完成！模型保存在: ${OUTPUT_PATH}"
