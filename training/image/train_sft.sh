@@ -142,7 +142,7 @@ cd "${DIFFSYNTH_PATH}"
 ACCELERATE_CONFIG="${SCRIPT_DIR}/../../configs/accelerate_config_single.yaml"
 if [ ! -f "${ACCELERATE_CONFIG}" ]; then
     # Fallback: create a minimal config
-    ACCELERATE_CONFIG="/tmp/accelerate_config.yaml"
+    ACCELERATE_CONFIG="${SCRIPT_DIR}/accelerate_config.yaml"
     cat > "${ACCELERATE_CONFIG}" << EOF
 compute_environment: LOCAL_MACHINE
 distributed_type: DEEPSPEED

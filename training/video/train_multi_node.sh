@@ -161,7 +161,7 @@ mkdir -p "${OUTPUT_PATH}"
 # ============================================================
 # Generate Dynamic Accelerate Config
 # ============================================================
-CONFIG_FILE="/tmp/accelerate_config_${NUM_NODES}x${GPUS_PER_NODE}.yaml"
+CONFIG_FILE="${SCRIPT_DIR}/accelerate_config.yaml"
 cat > "${CONFIG_FILE}" << EOF
 compute_environment: LOCAL_MACHINE
 debug: false
