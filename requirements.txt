@@ -20,5 +20,8 @@ opencv-python>=4.8.0
 # Puzzle Generation & Evaluation
 tqdm>=4.66.0
 
+# Optional: Sudoku evaluation (requires: apt install tesseract-ocr)
+# pytesseract>=0.3.10
+
 # Optional: Audio transcription for evaluation
 # openai-whisper>=20231117
