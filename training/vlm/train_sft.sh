@@ -72,7 +72,7 @@ fi
 
 if [ ! -f "$DATASET" ]; then
     echo "Error: Dataset file not found: $DATASET"
-    echo "Please run: python -m vtb_training.data.prepare_vlm_data --data_root <path>"
+    echo "Please run: python -m data.tools.prepare_vlm_data --data_root <path>"
     exit 1
 fi
 

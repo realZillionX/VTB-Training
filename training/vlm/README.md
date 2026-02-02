@@ -12,12 +12,12 @@ pip install ms-swift peft vllm datasets
 
 ```bash
 # 将 VLMPuzzle 数据集转换为 ms-swift 格式
-python -m vtb_training.data.prepare_vlm_data \
+python -m data.tools.prepare_vlm_data \
     --data_root /path/to/VLMPuzzle/dataset \
     --output_dir ./data
 
 # 输出:
-#   data/train_sft.jsonl   - SFT 训练数据
+#   data/train_sft.jsonl   - SFT 训练数据（默认使用绝对图片路径）
 #   data/train_grpo.jsonl  - GRPO 训练数据
 ```
 
@@ -37,7 +37,7 @@ bash train_sft.sh --model_path /path/to/Qwen3-VL-32B-Thinking
 在 SFT 完成后，加载 checkpoint 继续 GRPO 训练：
 
 ```bash
-python train_grpo.py \
+bash train_grpo.sh \
     --model_path output/sft_qwen3_vl/checkpoint-100 \
     --data_path data/train_grpo.jsonl \
     --output_dir output/grpo_qwen3_vl
@@ -50,9 +50,28 @@ python train_grpo.py \
 
 ## 奖励函数
 
-GRPO 使用自定义奖励函数（`vtb_training/rewards/vlm_rewards.py`）：
+GRPO 使用自定义奖励函数（`training/vlm/rewards/vlm_rewards.py`）：
 
 | 任务类型 | 评分规则 |
 |---------|---------|
 | Eyeballing | 1.0=正确, 0.0=错误, -1.0=格式错误 |
 | Maze | 0.0~1.0=部分匹配, -1.0=格式错误 |
+
+## 验证
+
+```bash
+python tests/vlm/validate_model.py \
+    --model_path /path/to/Qwen3-VL-32B \
+    --data_path data/train_sft.jsonl \
+    --output_dir output/validate_vlm \
+    --num_samples 50
+```
+
+## 预检
+
+```bash
+python tests/vlm/infer_precheck.py \
+    --model_path /path/to/Qwen3-VL-32B \
+    --data_path data/train_sft.jsonl \
+    --num_samples 5
+```

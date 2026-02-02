@@ -16,7 +16,7 @@ pip install accelerate deepspeed
 
 ```bash
 # 将 VLMPuzzle 数据集转换为 DiffSynth-Studio 格式
-python -m vtb_training.data.prepare_image_data \
+python -m data.tools.prepare_image_data \
     --dataset_root /path/to/VLMPuzzle/dataset \
     --output_path ./data/metadata.json
 
@@ -37,6 +37,12 @@ bash train_sft.sh --dataset_root /path/to/VLMPuzzle/dataset
 #   --learning_rate 1e-4
 #   --num_epochs 5
 #   --lora_rank 32
+#   --num_nodes 2
+#   --gpus_per_node 8
+#   --machine_rank 0
+#   --main_process_ip 10.0.0.1
+#   --main_process_port 29500
+#   --accelerate_config /path/to/accelerate_config.yaml
 ```
 
 ## 训练参数
@@ -51,10 +57,20 @@ bash train_sft.sh --dataset_root /path/to/VLMPuzzle/dataset
 ## 验证
 
 ```bash
-python validate_model.py \
+python tests/image/validate_model.py \
     --lora_path ./outputs/train/Qwen-Image-Edit-2511_lora/epoch-4.safetensors \
+    --metadata_path /path/to/VLMPuzzle/dataset/maze_square/data.json \
     --output_dir ./outputs/validate \
     --num_samples 10
+```
+
+## 预检
+
+```bash
+python tests/image/infer_precheck.py \
+    --metadata_path /path/to/VLMPuzzle/dataset/maze_square/data.json \
+    --output_dir ./outputs/precheck \
+    --num_samples 5
 ```
 
 ## 输出格式
@@ -63,7 +79,7 @@ python validate_model.py \
 ```json
 {
     "prompt": "Draw a red path connecting two red dots...",
-    "image": "dataset_maze/solutions/xxx.png",
-    "edit_image": "dataset_maze/puzzles/xxx.png"
+    "image": "maze_square/solutions/xxx.png",
+    "edit_image": "maze_square/puzzles/xxx.png"
 }
 ```

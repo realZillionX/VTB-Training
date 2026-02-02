@@ -140,24 +140,50 @@ def launch_training_task_resume(
     
     # Calculate step offset for visual continuity
     steps_per_epoch = len(dataloader)
+    resume_step_in_epoch = 0
     if resume_step is not None:
         # If explicitly resuming from step N, set num_steps to N
-        # And calculate estimated start_epoch if not provided (or override 0)
         model_logger.num_steps = resume_step
         if start_epoch == 0:
             start_epoch = resume_step // steps_per_epoch
             if accelerator.is_main_process:
                 print(f"Estimated resume epoch based on step {resume_step}: Epoch {start_epoch}")
+        resume_step_in_epoch = resume_step - start_epoch * steps_per_epoch
+        if resume_step_in_epoch < 0:
+            if accelerator.is_main_process:
+                print(f"Warning: resume_step ({resume_step}) is smaller than start_epoch ({start_epoch}). Resetting resume_step_in_epoch to 0.")
+            resume_step_in_epoch = 0
+        if resume_step_in_epoch >= steps_per_epoch:
+            extra_epochs = resume_step_in_epoch // steps_per_epoch
+            start_epoch += extra_epochs
+            resume_step_in_epoch = resume_step_in_epoch % steps_per_epoch
     elif start_epoch > 0:
         # If resuming from epoch but no step info, estimate steps
         estimated_steps = start_epoch * steps_per_epoch
         model_logger.num_steps = estimated_steps
 
-    if accelerator.is_main_process and start_epoch > 0:
+    if accelerator.is_main_process and (start_epoch > 0 or resume_step_in_epoch > 0):
         print(f"Resuming training loop from Epoch {start_epoch} (Step {model_logger.num_steps})")
 
     for epoch_id in range(start_epoch, num_epochs):
-        for data in tqdm(dataloader):
+        if resume_step_in_epoch > 0 and epoch_id == start_epoch:
+            if accelerator.is_main_process:
+                print(f"Skipping {resume_step_in_epoch} steps to align resume position within epoch {epoch_id}.")
+            dataloader_iter = iter(dataloader)
+            skipped = 0
+            while skipped < resume_step_in_epoch:
+                try:
+                    next(dataloader_iter)
+                except StopIteration:
+                    break
+                skipped += 1
+            if skipped != resume_step_in_epoch and accelerator.is_main_process:
+                print(f"Warning: Only skipped {skipped} steps; dataloader exhausted earlier than expected.")
+            data_iter = dataloader_iter
+            progress = tqdm(data_iter, total=steps_per_epoch, initial=skipped)
+        else:
+            progress = tqdm(dataloader, total=steps_per_epoch)
+        for data in progress:
             with accelerator.accumulate(model):
                 optimizer.zero_grad()
                 if dataset.load_from_cache:
@@ -171,6 +197,7 @@ def launch_training_task_resume(
                 scheduler.step()
         if save_steps is None:
             model_logger.on_epoch_end(accelerator, model, epoch_id)
+        resume_step_in_epoch = 0
     model_logger.on_training_end(accelerator, model, save_steps)
 
 
@@ -183,6 +210,8 @@ def wan_parser():
     parser.add_argument("--max_timestep_boundary", type=float, default=1.0, help="Max timestep boundary (for mixed models, e.g., Wan-AI/Wan2.2-I2V-A14B).")
     parser.add_argument("--min_timestep_boundary", type=float, default=0.0, help="Min timestep boundary (for mixed models, e.g., Wan-AI/Wan2.2-I2V-A14B).")
     parser.add_argument("--initialize_model_on_cpu", default=False, action="store_true", help="Whether to initialize models on CPU.")
+    parser.add_argument("--start_epoch", type=int, default=0, help="Resume training from this epoch index (0-based).")
+    parser.add_argument("--resume_step", type=int, default=None, help="Resume training from this global step index.")
     return parser
 
 
@@ -191,62 +220,70 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # ================= Auto Resume Logic =================
-    if args.lora_checkpoint is None and os.path.exists(args.output_path):
-        checkpoints = []
-        for file in os.listdir(args.output_path):
-            if file.endswith(".safetensors"):
-                # Parse epoch-X.safetensors
-                if file.startswith("epoch-"):
-                    try:
-                        idx = int(file.split("-")[1].split(".")[0])
-                        checkpoints.append((idx, file, "epoch"))
-                    except: pass
-                # Parse step-Y.safetensors
-                elif file.startswith("step-"):
-                    try:
-                        idx = int(file.split("-")[1].split(".")[0])
-                        # Prioritize epoch over step if numbers are confusing, but usually max is best
-                        # Give steps a lower priority or treat them separately?
-                        # Let's just treat them as candidates.
-                        # Actually epoch numbers are small (0,1,2..), step numbers are large (500, 1000..).
-                        # Let's prioritize epochs if available, else steps?
-                        # Better strategy: Find MAX epoch. If no epochs, find MAX step.
-                        pass # Handle separately
-                    except: pass
-        
-        # 1. Try to find latest epoch checkpoint
-        latest_ckpt = None
-        epoch_ckpts = [f for f in os.listdir(args.output_path) if f.startswith("epoch-") and f.endswith(".safetensors")]
-        if epoch_ckpts:
-            # Sort by number: epoch-1.safetensors, epoch-10.safetensors
-            epoch_ckpts.sort(key=lambda x: int(x.split("-")[1].split(".")[0]))
-            latest_ckpt = os.path.join(args.output_path, epoch_ckpts[-1])
+    def _parse_ckpt_name(file_name):
+        if not file_name.endswith(".safetensors"):
+            return None
+        if file_name.startswith("epoch-"):
             try:
-                # epoch-X means X is finished, so start from X+1
-                args.start_epoch = int(epoch_ckpts[-1].split("-")[1].split(".")[0]) + 1
+                idx = int(file_name.split("-")[1].split(".")[0])
+                return ("epoch", idx)
             except:
-                args.start_epoch = 0
-            print(f"[Auto Resume] Found epoch checkpoint: {latest_ckpt}, resuming at Epoch {args.start_epoch}")
-        
-        # 2. If no epoch checkpoint, try step checkpoint
-        if latest_ckpt is None:
-            step_ckpts = [f for f in os.listdir(args.output_path) if f.startswith("step-") and f.endswith(".safetensors")]
-            if step_ckpts:
-                step_ckpts.sort(key=lambda x: int(x.split("-")[1].split(".")[0]))
-                latest_ckpt = os.path.join(args.output_path, step_ckpts[-1])
-                print(f"[Auto Resume] Found step checkpoint: {latest_ckpt}")
-        
+                return None
+        if file_name.startswith("step-"):
+            try:
+                idx = int(file_name.split("-")[1].split(".")[0])
+                return ("step", idx)
+            except:
+                return None
+        return None
+
+    def _find_latest_checkpoint(output_path):
+        candidates = []
+        for file in os.listdir(output_path):
+            parsed = _parse_ckpt_name(file)
+            if parsed is None:
+                continue
+            full_path = os.path.join(output_path, file)
+            try:
+                mtime = os.path.getmtime(full_path)
+            except OSError:
+                continue
+            kind, idx = parsed
+            candidates.append((mtime, idx, kind, full_path))
+        if not candidates:
+            return None
+        candidates.sort(key=lambda x: (x[0], x[1]))
+        mtime, idx, kind, full_path = candidates[-1]
+        return {"path": full_path, "kind": kind, "index": idx, "mtime": mtime}
+
+    def _apply_resume_from_ckpt(args, ckpt_info, reason):
+        if ckpt_info is None:
+            return
+        kind = ckpt_info["kind"]
+        idx = ckpt_info["index"]
+        if kind == "step":
+            if getattr(args, "resume_step", None) is None and getattr(args, "start_epoch", 0) == 0:
+                args.resume_step = idx
+                print(f"[Auto Resume] {reason}: resume_step = {idx}")
+        elif kind == "epoch":
+            if getattr(args, "resume_step", None) is None and getattr(args, "start_epoch", 0) == 0:
+                args.start_epoch = idx + 1
+                print(f"[Auto Resume] {reason}: start_epoch = {args.start_epoch}")
+
+    if args.lora_checkpoint is None and os.path.exists(args.output_path) and getattr(args, "resume_step", None) is None and getattr(args, "start_epoch", 0) == 0:
+        latest_ckpt = _find_latest_checkpoint(args.output_path)
         if latest_ckpt:
-            print(f"[Auto Resume] Setting lora_checkpoint = {latest_ckpt}")
-            args.lora_checkpoint = latest_ckpt
-            
-            # If step-based checkpoint logic
-            if "step-" in os.path.basename(latest_ckpt):
-                try:
-                    args.resume_step = int(os.path.basename(latest_ckpt).split("-")[1].split(".")[0])
-                    # We don't set start_epoch here, let runner calculate it from len(dataloader)
-                except:
-                    pass
+            print(f"[Auto Resume] Found latest checkpoint: {latest_ckpt['path']}")
+            print(f"[Auto Resume] Setting lora_checkpoint = {latest_ckpt['path']}")
+            args.lora_checkpoint = latest_ckpt["path"]
+            _apply_resume_from_ckpt(args, latest_ckpt, "Auto resume")
+    elif args.lora_checkpoint is not None:
+        parsed = _parse_ckpt_name(os.path.basename(args.lora_checkpoint))
+        if parsed is not None:
+            kind, idx = parsed
+            _apply_resume_from_ckpt(args, {"kind": kind, "index": idx}, "Manual checkpoint hint")
+        else:
+            print(f"[Auto Resume] Checkpoint name not recognized: {args.lora_checkpoint}. Progress will start from step 0.")
     # =====================================================
 
     accelerator = accelerate.Accelerator(

@@ -24,8 +24,8 @@ from swift.rlhf_trainers import GRPOTrainer, GRPOConfig
 from swift.utils import get_logger
 from peft import LoraConfig, TaskType
 
-# Import reward functions from vtb_training package
-from vtb_training.rewards.vlm_rewards import reward_eyeballing, reward_maze, reward_format
+# Import reward functions from data package
+from training.vlm.rewards.vlm_rewards import reward_eyeballing, reward_maze, reward_format
 
 logger = get_logger()
 

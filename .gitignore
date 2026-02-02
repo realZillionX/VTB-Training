@@ -12,6 +12,7 @@ build/
 .vscode/
 *.swp
 *.swo
+*.pdf
 
 # Output
 outputs/
@@ -23,7 +24,13 @@ checkpoints/
 !requirements.txt
 
 # Data
-data/
+# Data Artifacts
+dataset/
+/data/test_*/
+
+# Data Tools (Python Package)
+!data/
+
 dataset/
 *.csv
 *.json

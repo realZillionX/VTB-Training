@@ -16,6 +16,12 @@
 #   --dataset_root: VLMPuzzle dataset root
 #   --output_dir: Output directory for checkpoints
 #   --metadata_path: Path to metadata.json (default: ./data/metadata.json)
+#   --num_nodes: Total nodes (default: 1)
+#   --gpus_per_node: GPUs per node (default: 8)
+#   --machine_rank: Current node rank (default: 0)
+#   --main_process_ip: Main node IP (required if num_nodes > 1)
+#   --main_process_port: Main node port (default: 29500)
+#   --accelerate_config: Use custom accelerate config (skip auto-generate)
 #   --learning_rate: Learning rate (default: 1e-4)
 #   --num_epochs: Number of epochs (default: 5)
 #   --lora_rank: LoRA rank (default: 32)
@@ -29,6 +35,15 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 METADATA_PATH="${SCRIPT_DIR}/data/metadata.json"
 OUTPUT_PATH="${SCRIPT_DIR}/outputs/train/Qwen-Image-Edit-2511_lora"
 DATASET_ROOT=""
+DATASET_BASE_PATH=""
+ACCELERATE_CONFIG=""
+
+# Distributed parameters (defaults)
+NUM_NODES=1
+GPUS_PER_NODE=8
+MACHINE_RANK=0
+MAIN_PROCESS_IP=""
+MAIN_PROCESS_PORT=29500
 
 # Training parameters (defaults)
 LEARNING_RATE="${LEARNING_RATE:-1e-4}"
@@ -53,6 +68,30 @@ while [[ $# -gt 0 ]]; do
             ;;
         --output_dir)
             OUTPUT_PATH="$2"
+            shift 2
+            ;;
+        --accelerate_config)
+            ACCELERATE_CONFIG="$2"
+            shift 2
+            ;;
+        --num_nodes)
+            NUM_NODES="$2"
+            shift 2
+            ;;
+        --gpus_per_node)
+            GPUS_PER_NODE="$2"
+            shift 2
+            ;;
+        --machine_rank)
+            MACHINE_RANK="$2"
+            shift 2
+            ;;
+        --main_process_ip)
+            MAIN_PROCESS_IP="$2"
+            shift 2
+            ;;
+        --main_process_port)
+            MAIN_PROCESS_PORT="$2"
             shift 2
             ;;
         --learning_rate)
@@ -101,9 +140,15 @@ if [ ! -f "${METADATA_PATH}" ]; then
     fi
     
     echo "Generating metadata from dataset..."
-    python -m vtb_training.data.prepare_image_data \
+    python -m data.tools.prepare_image_data \
         --dataset_root "${DATASET_ROOT}" \
         --output_path "${METADATA_PATH}"
+fi
+
+if [ -n "${DATASET_ROOT}" ]; then
+    DATASET_BASE_PATH="${DATASET_ROOT}"
+else
+    echo "Warning: --dataset_root not provided. Assume metadata.json contains absolute paths."
 fi
 
 # ============================================================
@@ -116,8 +161,15 @@ echo ""
 echo "Configuration:"
 echo "  DiffSynth-Studio: ${DIFFSYNTH_PATH}"
 echo "  Dataset Root: ${DATASET_ROOT:-'(using metadata directly)'}"
+echo "  Dataset Base Path: ${DATASET_BASE_PATH:-'(empty)'}"
 echo "  Metadata Path: ${METADATA_PATH}"
 echo "  Output Path: ${OUTPUT_PATH}"
+echo "  Num Nodes: ${NUM_NODES}"
+echo "  GPUs/Node: ${GPUS_PER_NODE}"
+echo "  Machine Rank: ${MACHINE_RANK}"
+if [ -n "${ACCELERATE_CONFIG}" ]; then
+  echo "  Accelerate Config: ${ACCELERATE_CONFIG}"
+fi
 echo ""
 echo "Training Parameters:"
 echo "  Learning Rate: ${LEARNING_RATE}"
@@ -138,15 +190,21 @@ echo ""
 # Change to DiffSynth-Studio directory
 cd "${DIFFSYNTH_PATH}"
 
-# Use accelerate with the config from VTB-Training
-ACCELERATE_CONFIG="${SCRIPT_DIR}/../../configs/accelerate_config_single.yaml"
-if [ ! -f "${ACCELERATE_CONFIG}" ]; then
-    # Fallback: create a minimal config
+# Use accelerate config (auto-generate if not provided)
+if [ -z "${ACCELERATE_CONFIG}" ]; then
     ACCELERATE_CONFIG="${SCRIPT_DIR}/accelerate_config.yaml"
+    if [ "${NUM_NODES}" -gt 1 ] && [ -z "${MAIN_PROCESS_IP}" ]; then
+        echo "Error: --main_process_ip is required when --num_nodes > 1"
+        exit 1
+    fi
+
+    TOTAL_PROCS=$((NUM_NODES * GPUS_PER_NODE))
     cat > "${ACCELERATE_CONFIG}" << EOF
 compute_environment: LOCAL_MACHINE
 distributed_type: DEEPSPEED
-num_processes: 8
+num_machines: ${NUM_NODES}
+num_processes: ${TOTAL_PROCS}
+machine_rank: ${MACHINE_RANK}
 mixed_precision: bf16
 deepspeed_config:
   zero_stage: 2
@@ -154,12 +212,18 @@ deepspeed_config:
   offload_param_device: 'cpu'
   gradient_accumulation_steps: 1
 EOF
+    if [ "${NUM_NODES}" -gt 1 ]; then
+        cat >> "${ACCELERATE_CONFIG}" << EOF
+main_process_ip: ${MAIN_PROCESS_IP}
+main_process_port: ${MAIN_PROCESS_PORT}
+EOF
+    fi
 fi
 
 accelerate launch \
     --config_file "${ACCELERATE_CONFIG}" \
     examples/qwen_image/model_training/train.py \
-    --dataset_base_path "${DATASET_ROOT:-$(dirname $(dirname ${METADATA_PATH}))}" \
+    --dataset_base_path "${DATASET_BASE_PATH}" \
     --dataset_metadata_path "${METADATA_PATH}" \
     --data_file_keys "image,edit_image" \
     --extra_inputs "edit_image" \
