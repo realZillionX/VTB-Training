@@ -5,10 +5,8 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from data.puzzle.ray_intersection import (
-    RayIntersectionEvaluator,
-    RayIntersectionGenerator,
-)
+from data.puzzle.eyeballing.ray_intersection.evaluator import RayIntersectionEvaluator
+from data.puzzle.eyeballing.ray_intersection.generator import RayIntersectionGenerator
 
 
 def test_ray_intersection_generator_outputs():

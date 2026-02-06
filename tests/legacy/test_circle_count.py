@@ -1,10 +1,8 @@
 import json
 from pathlib import Path
 
-from data.puzzle.circle_count import (
-    CircleCountEvaluator,
-    CircleCountGenerator,
-)
+from data.puzzle.visual.circle_count.evaluator import CircleCountEvaluator
+from data.puzzle.visual.circle_count.generator import CircleCountGenerator
 
 
 def test_circle_count_generator_creates_metadata(tmp_path):

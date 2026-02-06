@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from data.puzzle.rects import RectsEvaluator
+from data.puzzle.visual.rects.evaluator import RectsEvaluator
 
 
 class RectsEvaluatorTextTests(unittest.TestCase):

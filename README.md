@@ -22,6 +22,20 @@ pip install -r requirements.txt
 
 ## 快速开始
 
+### 0. 统一数据生成入口（多 CPU 并行）
+
+```bash
+python -m data.tools.generate_dataset \
+  --output_dir /path/to/output \
+  --tasks all \
+  --count 100 \
+  --num_workers 8 \
+  --video
+```
+
+> 说明：该脚本会在 `output_dir/<task>/` 下生成数据，并自动合并 `data.json`。  
+> 若只生成指定任务，例如 `maze_square`：`--tasks maze_square`。
+
 ### 1. VLM 训练 (Qwen3-VL)
 
 ```bash
@@ -34,7 +48,7 @@ python -m data.tools.prepare_vlm_data \
 cd training/vlm && bash train_sft.sh --model_path /path/to/Qwen3-VL-32B
 
 # GRPO 强化学习
-python train_grpo.py --model_path /path/to/sft_checkpoint
+cd training/vlm && bash train_grpo.sh --model_path /path/to/sft_checkpoint
 ```
 
 ### 2. 图像编辑模型训练 (Qwen-Image)
@@ -91,29 +105,66 @@ Visual Centric 任务的生成器代码大多**已存在**（`data/puzzle/`）�
 - [x] **Import 修复**: 修正了重构带来的相对路径引用问题。
 
 #### Phase 2: 核心任务数据生成 (Data Generation)
-- [x] **Eyeballing (High Priority)**: 编写 `generate_eyeballing_video.py`，支持 CLI 参数配置难度/画布尺寸。
-- [x] **Maze**: 编写 Hexagon/Circle 的参数化生成脚本。
+- [x] **Eyeballing (High Priority)**: 统一入口 `data/tools/generate_dataset.py` 支持 CLI 参数配置难度/画布尺寸。
+- [x] **Maze**: 统一入口支持 Hexagon / Labyrinth 生成与参数化配置。
 
 #### Phase 3: 模型训练 (Training)
 - [ ] **Wan2.2 Single-Task**: 待 Eyeballing 数据生成后，启动单任务训练。
 - [ ] **VLM / Image Model**: 同步启动 SFT。
 
-## 项目结构
+## 开发指南与代码结构
+
+### 1. 核心理念
+本项目面向多模态推理任务的可复现训练，优先验证 Visual Reasoning 能力边界，确保数据生成、评测与训练脚本闭环一致。
+
+### 2. 目录结构（简版）
 
 ```
 VTB-Training/
-├── data/                      # 核心库 (Python Package)
-│   ├── puzzle/                # Generator 源码 (Maze, Eyeballing)
-│   ├── tools/                 # 批量数据生成工具
-│   └── utils/                 # 通用工具
-├── dataset/                   # 数据产物 (已忽略)
+├── data/                      # 核心库（生成与评测）
+│   ├── puzzle/                # 各类任务生成器与评测器
+│   └── tools/                 # 数据准备与批量处理脚本
+├── dataset/                   # 数据产物（已忽略）
 ├── training/                  # 训练脚本
 │   ├── vlm/                   # Qwen3-VL
 │   ├── image/                 # Qwen-Image
 │   └── video/                 # Wan2.2
-├── code_test/                 # 旧版单元测试（建议逐步迁移到 tests/）
-└── tests/                     # 评测脚本与轻量单测（含 evaluator/vlm/video/image 四个分区）
+└── tests/                     # 单元测试与评测器验证
+└── evaluators/                # 模型评测脚本（image/video/vlm）
 ```
+
+### 3. data/puzzle（生成与评测）
+`data/puzzle/` 聚合所有 Puzzle 的生成器与评测器，按任务类型拆分：
+
+- `eyeballing/`：几何直觉类任务（如 midpoint、orthocenter、perpendicular 等）。
+- `maze/`：迷宫任务（square / hexagon / labyrinth），含生成与像素级评测。
+- `visual/`：视觉推理任务（如 jigsaw、sudoku、circle_count、rects、arcagi）。
+
+说明：评测器与生成器共用坐标系、渲染参数与元数据结构，放在同一模块更利于复用与一致性校验。
+
+### 4. data/tools（数据准备）
+`data/tools/` 负责把 VLMPuzzle 的 `data.json` 转换为训练框架所需格式：
+
+- `prepare_vlm_data.py`：VLMPuzzle → ms-swift JSONL。
+- `prepare_image_data.py`：VLMPuzzle → DiffSynth-Studio `metadata.json`。
+- `prepare_video_data.py`：VLMPuzzle → Wan2.2 训练 CSV。
+- `video/`：批量视频生成与变体生成脚本。
+
+### 5. tests（评测与验证）
+`tests/` 仅做单测与评测器验证，不包含训练逻辑。
+`evaluators/` 存放模型评测脚本（image / video / vlm）。
+
+### 6. 建议工作流
+1. 在 `data/puzzle/` 修改生成或评测逻辑。
+2. 在 `tests/` 添加或更新单测。
+3. 使用 `data/tools/` 生成训练数据到 `dataset/`。
+4. 使用 `training/` 执行训练。
+5. 使用 `evaluators/` 脚本进行评测与汇总。
+
+### 7. 协作规范
+1. 避免随意删除他人正在使用的脚本或路径，重构需给出迁移方案。
+2. 重要路径变化必须同步 README 或相关文档。
+3. 训练与评测脚本的参数与路径约定应保持一致。
 
 ## 引用
 

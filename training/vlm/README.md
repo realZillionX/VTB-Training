@@ -60,7 +60,7 @@ GRPO 使用自定义奖励函数（`training/vlm/rewards/vlm_rewards.py`）：
 ## 验证
 
 ```bash
-python tests/vlm/validate_model.py \
+python evaluators/vlm/validate_model.py \
     --model_path /path/to/Qwen3-VL-32B \
     --data_path data/train_sft.jsonl \
     --output_dir output/validate_vlm \
@@ -70,7 +70,7 @@ python tests/vlm/validate_model.py \
 ## 预检
 
 ```bash
-python tests/vlm/infer_precheck.py \
+python evaluators/vlm/infer_precheck.py \
     --model_path /path/to/Qwen3-VL-32B \
     --data_path data/train_sft.jsonl \
     --num_samples 5

@@ -3,7 +3,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from data.puzzle.arcagi import ArcPuzzleGenerator, ArcPuzzleEvaluator
+from data.puzzle.visual.arcagi.generator import ArcPuzzleGenerator
+from data.puzzle.visual.arcagi.evaluator import ArcPuzzleEvaluator
 
 
 class ArcPuzzleIntegrationTests(unittest.TestCase):

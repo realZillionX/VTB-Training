@@ -6,7 +6,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
-from data.puzzle.arc_connect.evaluator import ArcConnectEvaluator
+from data.puzzle.eyeballing.arc_connect.evaluator import ArcConnectEvaluator
 
 
 class ArcConnectEvaluatorTests(unittest.TestCase):

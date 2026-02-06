@@ -3,7 +3,8 @@ import json
 import cv2
 import numpy as np
 
-from data.puzzle.midpoint import MidpointEvaluator, MidpointGenerator
+from data.puzzle.eyeballing.midpoint.evaluator import MidpointEvaluator
+from data.puzzle.eyeballing.midpoint.generator import MidpointGenerator
 
 
 def test_midpoint_generator_outputs(tmp_path):

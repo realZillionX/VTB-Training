@@ -103,18 +103,18 @@ bash train_sft.sh --dataset ./dataset/train_video.csv --dataset_root /path/to/VL
 
 ## 推理（建议使用预检脚本）
 
-单样本推理建议直接复用 `tests/video/infer_precheck.py`，将 CSV 控制为 1 条样本即可。
+单样本推理建议直接复用 `evaluators/video/infer_precheck.py`，将 CSV 控制为 1 条样本即可。
 
 ## 预检与验证
 
 ```bash
-python tests/video/infer_precheck.py \
+python evaluators/video/infer_precheck.py \
     --dataset ./dataset/train_video.csv \
     --model_base_path /path/to/Wan2.2-TI2V-5B \
     --lora_ckpt ./output/wan_lora/epoch-2.safetensors \
     --output_dir ./outputs/precheck_video
 
-python tests/video/validate_model.py \
+python evaluators/video/validate_model.py \
     --dataset ./dataset/train_video.csv \
     --metadata_path /path/to/VLMPuzzle/dataset/maze_square/data.json \
     --model_base_path /path/to/Wan2.2-TI2V-5B \
@@ -125,7 +125,7 @@ python tests/video/validate_model.py \
 ## 评估
 
 ```bash
-python tests/video/parallel_eval.py \
+python evaluators/video/parallel_eval.py \
     --input_dir /path/to/VLMPuzzle/dataset/maze_square/puzzles \
     --lora_ckpt ./output/wan_lora/epoch-2.safetensors \
     --metadata_path /path/to/VLMPuzzle/dataset/maze_square/data.json

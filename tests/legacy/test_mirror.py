@@ -6,7 +6,8 @@ from pathlib import Path
 from PIL import Image
 import numpy as np
 
-from data.puzzle.mirror import MirrorGenerator, MirrorEvaluator
+from data.puzzle.visual.mirror.generator import MirrorGenerator
+from data.puzzle.visual.mirror.evaluator import MirrorEvaluator
 
 
 class MirrorEvaluatorTests(unittest.TestCase):

@@ -5,7 +5,8 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
-from data.puzzle.sudoku import SudokuEvaluator, SudokuGenerator
+from data.puzzle.visual.sudoku.evaluator import SudokuEvaluator
+from data.puzzle.visual.sudoku.generator import SudokuGenerator
 
 
 class SudokuEvaluatorTests(unittest.TestCase):

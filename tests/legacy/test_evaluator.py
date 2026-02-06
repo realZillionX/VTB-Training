@@ -5,8 +5,8 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
-from data.puzzle.jigsaw import JigsawGenerator
-from data.puzzle.jigsaw import JigsawEvaluator
+from data.puzzle.visual.jigsaw.generator import JigsawGenerator
+from data.puzzle.visual.jigsaw.evaluator import JigsawEvaluator
 
 
 class JigsawEvaluatorTests(unittest.TestCase):

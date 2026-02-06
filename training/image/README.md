@@ -57,7 +57,7 @@ bash train_sft.sh --dataset_root /path/to/VLMPuzzle/dataset
 ## 验证
 
 ```bash
-python tests/image/validate_model.py \
+python evaluators/image/validate_model.py \
     --lora_path ./outputs/train/Qwen-Image-Edit-2511_lora/epoch-4.safetensors \
     --metadata_path /path/to/VLMPuzzle/dataset/maze_square/data.json \
     --output_dir ./outputs/validate \
@@ -67,7 +67,7 @@ python tests/image/validate_model.py \
 ## 预检
 
 ```bash
-python tests/image/infer_precheck.py \
+python evaluators/image/infer_precheck.py \
     --metadata_path /path/to/VLMPuzzle/dataset/maze_square/data.json \
     --output_dir ./outputs/precheck \
     --num_samples 5
