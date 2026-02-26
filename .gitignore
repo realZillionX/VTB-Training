@@ -45,3 +45,8 @@ runs/
 # OS
 .DS_Store
 Thumbs.db
+
+# Inspire CLI
+.inspire/
+.env
+.env.*
